@@ -1,0 +1,113 @@
+#2
+// WeakPasswordCheckScreen.kt (в папке screens)
+package com.example.registrationapp.screens
+
+import android.content.Context
+import android.util.Log
+import android.widget.Toast
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import java.io.BufferedReader
+import java.io.IOException
+import java.io.InputStreamReader
+
+@Composable
+fun WeakPasswordCheckScreen() {
+    val context = LocalContext.current
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordFeedback by remember { mutableStateOf("") }
+    var isRegistrationEnabled by remember { mutableStateOf(false) }
+
+    val weakPasswords = remember { mutableStateListOf<String>() } // Используем MutableStateList
+
+    LaunchedEffect(context) {  // Load passwords only once when the composable is created
+        loadWeakPasswords(context, weakPasswords)
+    }
+
+
+    // Function to check password
+    fun checkPasswordStrength(password: String) {
+        if (weakPasswords.contains(password)) {
+            passwordFeedback = "Пароль ненадежный!"
+            isRegistrationEnabled = false
+        } else {
+            passwordFeedback = ""
+            isRegistrationEnabled = username.isNotEmpty() && password.isNotEmpty()  // Enable button if both fields are filled
+        }
+    }
+
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(text = "Регистрация")
+
+        OutlinedTextField(
+            value = username,
+            onValueChange = {
+                username = it
+                isRegistrationEnabled = password.isNotEmpty() && it.isNotEmpty() // Enable button when username is not empty
+            },
+            label = { Text("Логин") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = {
+                password = it
+                checkPasswordStrength(it)  // Call the check when password changes
+                isRegistrationEnabled = username.isNotEmpty() && it.isNotEmpty()
+            },
+            label = { Text("Пароль") },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (passwordFeedback.isNotEmpty()) {
+            Text(
+                text = passwordFeedback,
+                color = androidx.compose.ui.graphics.Color.Red
+            )
+        }
+
+
+        Button(
+            onClick = {
+                //  Действия при регистрации
+                Toast.makeText(context, "Регистрация: Логин - $username, Пароль - $password", Toast.LENGTH_SHORT).show()
+                // Добавьте логику сохранения данных (например, в Shared Preferences)
+            },
+            enabled = isRegistrationEnabled,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Зарегистрироваться")
+        }
+    }
+}
+
+private fun loadWeakPasswords(context: Context, weakPasswords: MutableList<String>) {
+    try {
+        val inputStream = context.assets.open("weak_passwords.txt")
+        val reader = BufferedReader(InputStreamReader(inputStream))
+        var line: String?
+        while (reader.readLine().also { line = it } != null) {
+            weakPasswords.add(line!!.trim())
+        }
+        reader.close()
+        Log.d("WeakPasswords", "Loaded ${weakPasswords.size} weak passwords")
+    } catch (e: IOException) {
+        Log.e("WeakPasswords", "Error loading weak passwords: ${e.message}")
+        Toast.makeText(context, "Ошибка загрузки списка ненадежных паролей.", Toast.LENGTH_SHORT).show()
+    }
+}
