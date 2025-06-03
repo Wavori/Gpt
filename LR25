@@ -1,24 +1,445 @@
-// ExternalFileScreen.kt (в папке screens)
-package com.example.registrationapp.screens
+#1
+package com.example.labwork25.Screens
 
-import android.app.Activity
-import android.content.Intent
-import android.net.Uri
-import android.os.Environment
-import android.provider.DocumentsContract
+import android.content.Context
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+
+@Composable
+fun EulaScreen(context: Context) {
+    val eulaText = remember { mutableStateOf("") }
+    val accepted = remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        eulaText.value = readAssetText(context, "eula.txt")
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = eulaText.value,
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = accepted.value,
+                onCheckedChange = { accepted.value = it }
+            )
+            Text(text = "Я прочитал условия лицензионного соглашения")
+        }
+
+        Button(
+            onClick = {},
+            enabled = accepted.value,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Принять")
+        }
+    }
+}
+
+fun readAssetText(context: Context, fileName: String): String {
+    return context.assets.open(fileName).bufferedReader().use { it.readText() }
+}
+
+
+#2
+package com.example.labwork25.Screens
+
+import android.content.Context
 import android.util.Log
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import java.io.BufferedReader
+import java.io.IOException
+import java.io.InputStreamReader
+
+@Composable
+fun RegistrationScreen() {
+    val context = LocalContext.current
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordFeedback by remember { mutableStateOf("") }
+    var isRegistrationEnabled by remember { mutableStateOf(false) }
+
+    val weakPasswords = remember { mutableStateListOf<String>() }
+
+    LaunchedEffect(context) {
+        loadWeakPasswords(context, weakPasswords)
+    }
+
+    fun checkPasswordStrength(password: String) {
+        if (weakPasswords.contains(password)) {
+            passwordFeedback = "Пароль ненадежный!"
+            isRegistrationEnabled = false
+        } else {
+            passwordFeedback = ""
+            isRegistrationEnabled = username.isNotEmpty() && password.isNotEmpty()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(text = "Регистрация")
+
+        OutlinedTextField(
+            value = username,
+            onValueChange = {
+                username = it
+                isRegistrationEnabled = password.isNotEmpty() && it.isNotEmpty()
+            },
+            label = { Text("Логин") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = {
+                password = it
+                checkPasswordStrength(it)
+                isRegistrationEnabled = username.isNotEmpty() && it.isNotEmpty()
+            },
+            label = { Text("Пароль") },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (passwordFeedback.isNotEmpty()) {
+            Text(
+                text = passwordFeedback,
+                color = androidx.compose.ui.graphics.Color.Red
+            )
+        }
+
+        Button(
+            onClick = {
+                Toast.makeText(context, "Регистрация: Логин - $username, Пароль - $password", Toast.LENGTH_SHORT).show()
+            },
+            enabled = isRegistrationEnabled,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Зарегистрироваться")
+        }
+    }
+}
+
+private fun loadWeakPasswords(context: Context, weakPasswords: MutableList<String>) {
+    try {
+        val inputStream = context.assets.open("weak_password.txt")
+        val reader = BufferedReader(InputStreamReader(inputStream))
+        var line: String?
+        while (reader.readLine().also { line = it } != null) {
+            weakPasswords.add(line!!.trim())
+        }
+        reader.close()
+        Log.d("WeakPasswords", "Loaded ${weakPasswords.size} weak passwords")
+    } catch (e: IOException) {
+        Log.e("WeakPasswords", "Error loading weak passwords: ${e.message}")
+        Toast.makeText(context, "Ошибка загрузки списка ненадежных паролей.", Toast.LENGTH_SHORT).show()
+    }
+}
+
+
+#3,4,5
+package com.example.labwork25.Screens
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.os.Environment
+import android.util.Log
+import android.widget.Toast
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStreamReader
+import java.text.SimpleDateFormat
+import java.util.*
+
+@SuppressLint("CoroutineCreationDuringComposition")
+@Composable
+fun NoteScreen() {
+    val context = LocalContext.current
+    var noteTitle by remember { mutableStateOf("") }
+    var noteContent by remember { mutableStateOf("") }
+    var fileList by remember { mutableStateOf(listOf<File>()) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val isSaveEnabled by remember {
+        derivedStateOf { noteTitle.isNotBlank() && noteContent.isNotBlank() }
+    }
+
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
+            fileList = loadNotes(context)
+        }
+    }
+
+    fun refreshFileList() {
+        coroutineScope.launch {
+            fileList = loadNotes(context)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(text = "Создание заметки", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+
+        OutlinedTextField(
+            value = noteTitle,
+            onValueChange = { noteTitle = it },
+            label = { Text("Название") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = noteContent,
+            onValueChange = { noteContent = it },
+            label = { Text("Содержание") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+        )
+
+        Button(
+            onClick = {
+                coroutineScope.launch {
+                    saveNote(context, noteTitle, noteContent)
+                    noteTitle = ""
+                    noteContent = ""
+                    fileList = loadNotes(context)  // Refresh the file list after saving
+                }
+            },
+            enabled = isSaveEnabled,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Сохранить")
+        }
+
+        Text(text = "Список заметок", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+
+        if (fileList.isEmpty()) {
+            Text(text = "Нет сохраненных заметок.")
+        } else {
+            LazyColumn {
+                items(fileList) { file ->
+                    NoteItem(
+                        file = file,
+                        onDeleteClick = {
+                            coroutineScope.launch {
+                                deleteNote(context, file)
+                                fileList = loadNotes(context)  // Refresh the file list after deleting
+                            }
+                        },
+                        onNoteClick = {
+                            coroutineScope.launch {
+                                val (title, content) = loadNoteContent(context, file)
+                                noteTitle = title ?: ""
+                                noteContent = content ?: ""
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NoteItem(file: File, onDeleteClick: () -> Unit, onNoteClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .clickable { onNoteClick() }, // Теперь вызываем onNoteClick
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = file.name, color = Color.Black)
+        IconButton(onClick = { onDeleteClick() }) {
+            Icon(Icons.Filled.Delete, contentDescription = "Delete Note")
+        }
+    }
+    Divider()
+}
+
+private suspend fun loadNotes(context: Context): List<File> = withContext(Dispatchers.IO) {
+    val directory = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "app_notes")
+    if (directory.exists()) {
+        directory.listFiles()?.toList()?.filter { it.isFile && it.name.endsWith(".txt") } ?: emptyList() // Добавлено условие для фильтрации txt файлов
+    } else {
+        emptyList()
+    }
+}
+
+private suspend fun saveNote(context: Context, title: String, content: String): Boolean = withContext(Dispatchers.IO) {
+    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+    val fileName = "Note_${timeStamp}_${title.replace(" ", "_")}.txt"
+    val directory = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "app_notes")
+
+    if (!directory.exists()) {
+        if (!directory.mkdirs()) {
+            Log.e("NoteScreen", "Failed to create directory")
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Ошибка при создании директории", Toast.LENGTH_SHORT).show()
+            }
+            return@withContext false
+        }
+    }
+
+    val file = File(directory, fileName)
+
+    try {
+        FileOutputStream(file).use { outputStream ->
+            outputStream.write("Название: $title\nСодержание:\n$content".toByteArray())
+        }
+        Log.d("NoteScreen", "Note saved to: ${file.absolutePath}")
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Заметка сохранена: ${file.absolutePath}", Toast.LENGTH_SHORT).show()
+        }
+        true
+    } catch (e: IOException) {
+        Log.e("NoteScreen", "Error saving note: ${e.message}")
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Ошибка при сохранении заметки", Toast.LENGTH_SHORT).show()
+        }
+        false
+    }
+}
+
+private suspend fun deleteNote(context: Context, file: File): Boolean = withContext(Dispatchers.IO) {
+    try {
+        if (file.delete()) {
+            Log.d("NoteScreen", "Note deleted: ${file.absolutePath}")
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Заметка удалена", Toast.LENGTH_SHORT).show()
+            }
+            true
+        } else {
+            Log.e("NoteScreen", "Failed to delete note: ${file.absolutePath}")
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Ошибка при удалении заметки", Toast.LENGTH_SHORT).show()
+            }
+            false
+        }
+    } catch (e: Exception) {
+        Log.e("NoteScreen", "Error deleting note: ${e.message}")
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Ошибка при удалении заметки", Toast.LENGTH_SHORT).show()
+        }
+        false
+    }
+}
+
+private suspend fun loadNoteContent(context: Context, file: File): Pair<String?, String?> = withContext(Dispatchers.IO) {
+    try {
+        val reader = BufferedReader(InputStreamReader(file.inputStream()))
+        var title: String? = null
+        val content = StringBuilder()
+        reader.use {
+            title = it.readLine()?.removePrefix("Название: ")
+            it.readLine() // Skip "Содержание:" line
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                content.append(line).append("\n")
+            }
+        }
+
+        Pair(title, content.toString())
+    } catch (e: IOException) {
+        Log.e("NoteScreen", "Error reading note content: ${e.message}")
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Ошибка при чтении заметки", Toast.LENGTH_SHORT).show()
+        }
+        Pair(null, null)
+    }
+}
+
+#6
+package com.example.labwork25.Screens
+
+import android.content.Context
+import android.net.Uri
+import android.util.Log
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
 
