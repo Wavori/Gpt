@@ -1,60 +1,57 @@
-// NoteScreen.kt (в папке screens)
+// ExternalFileScreen.kt (в папке screens)
 package com.example.registrationapp.screens
 
-import android.annotation.SuppressLint
-import android.content.Context
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.util.Log
 import android.widget.Toast
-import androidx.compose.foundation.clickable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.BufferedReader
-import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
-import java.text.SimpleDateFormat
-import java.util.*
 
-@SuppressLint("CoroutineCreationDuringComposition")
+private const val READ_REQUEST_CODE = 42
+private const val WRITE_REQUEST_CODE = 43
+
 @Composable
-fun NoteScreen() {
+fun ExternalFileScreen() {
     val context = LocalContext.current
-    var noteTitle by remember { mutableStateOf("") }
-    var noteContent by remember { mutableStateOf("") }
-    var fileList by remember { mutableStateOf(listOf<File>()) }
-    val coroutineScope = rememberCoroutineScope()
+    var fileContent by remember { mutableStateOf("") }
 
-    val isSaveEnabled by remember {
-        derivedStateOf { noteTitle.isNotBlank() && noteContent.isNotBlank() }
-    }
-
-    LaunchedEffect(Unit) {
-        coroutineScope.launch {
-            fileList = loadNotes(context)
+    // Launcher for opening a file
+    val openFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri: Uri? ->
+            uri?.let {
+                loadFileContent(context, it) { content ->
+                    fileContent = content ?: ""
+                }
+            }
         }
-    }
+    )
 
-    fun refreshFileList() {
-        coroutineScope.launch {
-            fileList = loadNotes(context)
+    // Launcher for saving a file
+    val saveFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain"), // Use "text/plain" for .txt files
+        onResult = { uri: Uri? ->
+            uri?.let {
+                saveFileContent(context, it, fileContent)
+            }
         }
-    }
+    )
+
 
     Column(
         modifier = Modifier
@@ -63,174 +60,70 @@ fun NoteScreen() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(text = "Создание заметки", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text(text = "Работа с внешними файлами")
 
         OutlinedTextField(
-            value = noteTitle,
-            onValueChange = { noteTitle = it },
-            label = { Text("Название") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        OutlinedTextField(
-            value = noteContent,
-            onValueChange = { noteContent = it },
-            label = { Text("Содержание") },
+            value = fileContent,
+            onValueChange = { fileContent = it },
+            label = { Text("Содержимое файла") },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(150.dp)
+                .height(200.dp)
         )
 
-        Button(
-            onClick = {
-                coroutineScope.launch {
-                    saveNote(context, noteTitle, noteContent)
-                    noteTitle = ""
-                    noteContent = ""
-                    fileList = loadNotes(context)  // Refresh the file list after saving
-                }
-            },
-            enabled = isSaveEnabled,
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Сохранить")
-        }
+            Button(
+                onClick = {
+                    openFileLauncher.launch(arrayOf("text/plain")) // Launch the file picker
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Открыть")
+            }
 
-        Text(text = "Список заметок", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-
-        if (fileList.isEmpty()) {
-            Text(text = "Нет сохраненных заметок.")
-        } else {
-            LazyColumn {
-                items(fileList) { file ->
-                    NoteItem(
-                        file = file,
-                        onDeleteClick = {
-                            coroutineScope.launch {
-                                deleteNote(context, file)
-                                fileList = loadNotes(context)  // Refresh the file list after deleting
-                            }
-                        },
-                        onNoteClick = {
-                            coroutineScope.launch {
-                                val (title, content) = loadNoteContent(context, file)
-                                noteTitle = title ?: ""
-                                noteContent = content ?: ""
-                            }
-                        }
-                    )
-                }
+            Button(
+                onClick = {
+                    // Open the save dialog
+                    saveFileLauncher.launch("my_file.txt") //  Provide a default file name
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Сохранить")
             }
         }
     }
 }
 
-@Composable
-fun NoteItem(file: File, onDeleteClick: () -> Unit, onNoteClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp)
-            .clickable { onNoteClick() }, // Теперь вызываем onNoteClick
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(text = file.name, color = Color.Black)
-        IconButton(onClick = { onDeleteClick() }) {
-            Icon(Icons.Filled.Delete, contentDescription = "Delete Note")
-        }
-    }
-    Divider()
-}
-
-private suspend fun loadNotes(context: Context): List<File> = withContext(Dispatchers.IO) {
-    val directory = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "app_notes")
-    if (directory.exists()) {
-        directory.listFiles()?.toList()?.filter { it.isFile && it.name.endsWith(".txt") } ?: emptyList() // Добавлено условие для фильтрации txt файлов
-    } else {
-        emptyList()
-    }
-}
-
-private suspend fun saveNote(context: Context, title: String, content: String): Boolean = withContext(Dispatchers.IO) {
-    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-    val fileName = "Note_${timeStamp}_${title.replace(" ", "_")}.txt"
-    val directory = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "app_notes")
-
-    if (!directory.exists()) {
-        if (!directory.mkdirs()) {
-            Log.e("NoteScreen", "Failed to create directory")
-            withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Ошибка при создании директории", Toast.LENGTH_SHORT).show()
-            }
-            return@withContext false
-        }
-    }
-
-    val file = File(directory, fileName)
-
+private fun loadFileContent(context: Context, uri: Uri, onContentLoaded: (String?) -> Unit) {
     try {
-        FileOutputStream(file).use { outputStream ->
-            outputStream.write("Название: $title\nСодержание:\n$content".toByteArray())
-        }
-        Log.d("NoteScreen", "Note saved to: ${file.absolutePath}")
-        withContext(Dispatchers.Main) {
-            Toast.makeText(context, "Заметка сохранена: ${file.absolutePath}", Toast.LENGTH_SHORT).show()
-        }
-        true
-    } catch (e: IOException) {
-        Log.e("NoteScreen", "Error saving note: ${e.message}")
-        withContext(Dispatchers.Main) {
-            Toast.makeText(context, "Ошибка при сохранении заметки", Toast.LENGTH_SHORT).show()
-        }
-        false
-    }
-}
-
-private suspend fun deleteNote(context: Context, file: File): Boolean = withContext(Dispatchers.IO) {
-    try {
-        if (file.delete()) {
-            Log.d("NoteScreen", "Note deleted: ${file.absolutePath}")
-            withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Заметка удалена", Toast.LENGTH_SHORT).show()
-            }
-            true
-        } else {
-            Log.e("NoteScreen", "Failed to delete note: ${file.absolutePath}")
-            withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Ошибка при удалении заметки", Toast.LENGTH_SHORT).show()
-            }
-            false
-        }
-    } catch (e: Exception) {
-        Log.e("NoteScreen", "Error deleting note: ${e.message}")
-        withContext(Dispatchers.Main) {
-            Toast.makeText(context, "Ошибка при удалении заметки", Toast.LENGTH_SHORT).show()
-        }
-        false
-    }
-}
-
-private suspend fun loadNoteContent(context: Context, file: File): Pair<String?, String?> = withContext(Dispatchers.IO) {
-    try {
-        val reader = BufferedReader(InputStreamReader(file.inputStream()))
-        var title: String? = null
+        val inputStream = context.contentResolver.openInputStream(uri)
+        val reader = BufferedReader(InputStreamReader(inputStream))
         val content = StringBuilder()
         reader.use {
-            title = it.readLine()?.removePrefix("Название: ")
-            it.readLine() // Skip "Содержание:" line
             var line: String?
             while (reader.readLine().also { line = it } != null) {
                 content.append(line).append("\n")
             }
         }
-
-        Pair(title, content.toString())
+        onContentLoaded(content.toString())
     } catch (e: IOException) {
-        Log.e("NoteScreen", "Error reading note content: ${e.message}")
-        withContext(Dispatchers.Main) {
-            Toast.makeText(context, "Ошибка при чтении заметки", Toast.LENGTH_SHORT).show()
+        Log.e("ExternalFileScreen", "Error loading file: ${e.message}")
+        Toast.makeText(context, "Ошибка при открытии файла", Toast.LENGTH_SHORT).show()
+        onContentLoaded(null)
+    }
+}
+
+private fun saveFileContent(context: Context, uri: Uri, content: String) {
+    try {
+        context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+            outputStream.write(content.toByteArray())
         }
-        Pair(null, null)
+        Toast.makeText(context, "Файл сохранен", Toast.LENGTH_SHORT).show()
+    } catch (e: IOException) {
+        Log.e("ExternalFileScreen", "Error saving file: ${e.message}")
+        Toast.makeText(context, "Ошибка при сохранении файла", Toast.LENGTH_SHORT).show()
     }
 }
