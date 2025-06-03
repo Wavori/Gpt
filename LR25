@@ -111,3 +111,102 @@ private fun loadWeakPasswords(context: Context, weakPasswords: MutableList<Strin
         Toast.makeText(context, "Ошибка загрузки списка ненадежных паролей.", Toast.LENGTH_SHORT).show()
     }
 }
+
+
+
+#3
+// NoteScreen.kt (в папке screens)
+package com.example.registrationapp.screens
+
+import android.content.Context
+import android.os.Environment
+import android.util.Log
+import android.widget.Toast
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.*
+
+@Composable
+fun NoteScreen() {
+    val context = LocalContext.current
+    var noteTitle by remember { mutableStateOf("") }
+    var noteContent by remember { mutableStateOf("") }
+
+    val isSaveEnabled by remember {
+        derivedStateOf { noteTitle.isNotBlank() && noteContent.isNotBlank() }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(text = "Создание заметки")
+
+        OutlinedTextField(
+            value = noteTitle,
+            onValueChange = { noteTitle = it },
+            label = { Text("Название") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = noteContent,
+            onValueChange = { noteContent = it },
+            label = { Text("Содержание") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp) // Set a reasonable height
+        )
+
+        Button(
+            onClick = {
+                saveNote(context, noteTitle, noteContent)
+                noteTitle = ""
+                noteContent = ""
+            },
+            enabled = isSaveEnabled,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Сохранить")
+        }
+    }
+}
+
+private fun saveNote(context: Context, title: String, content: String) {
+    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+    val fileName = "Note_${timeStamp}_${title.replace(" ", "_")}.txt" // Use timestamp and title for unique file name
+    val directory = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "app_notes")
+
+    if (!directory.exists()) {
+        if (!directory.mkdirs()) {
+            Log.e("NoteScreen", "Failed to create directory")
+            Toast.makeText(context, "Ошибка при создании директории", Toast.LENGTH_SHORT).show()
+            return
+        }
+    }
+
+    val file = File(directory, fileName)
+
+    try {
+        FileOutputStream(file).use { outputStream ->
+            outputStream.write("Название: $title\nСодержание:\n$content".toByteArray())
+        }
+        Toast.makeText(context, "Заметка сохранена: ${file.absolutePath}", Toast.LENGTH_SHORT).show()
+        Log.d("NoteScreen", "Note saved to: ${file.absolutePath}")
+    } catch (e: IOException) {
+        Log.e("NoteScreen", "Error saving note: ${e.message}")
+        Toast.makeText(context, "Ошибка при сохранении заметки", Toast.LENGTH_SHORT).show()
+    }
+}
