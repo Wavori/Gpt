@@ -210,3 +210,134 @@ private fun saveNote(context: Context, title: String, content: String) {
         Toast.makeText(context, "Ошибка при сохранении заметки", Toast.LENGTH_SHORT).show()
     }
 }
+
+
+#4
+// NoteScreen.kt (в папке screens)
+package com.example.registrationapp.screens
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.os.Environment
+import android.util.Log
+import android.widget.Toast
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.*
+
+@SuppressLint("CoroutineCreationDuringComposition")
+@Composable
+fun NoteScreen() {
+    val context = LocalContext.current
+    var noteTitle by remember { mutableStateOf("") }
+    var noteContent by remember { mutableStateOf("") }
+    var fileList by remember { mutableStateOf(listOf<File>()) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val isSaveEnabled by remember {
+        derivedStateOf { noteTitle.isNotBlank() && noteContent.isNotBlank() }
+    }
+
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
+            fileList = loadNotes(context)
+        }
+    }
+
+    fun refreshFileList() {
+        coroutineScope.launch {
+            fileList = loadNotes(context)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(text = "Создание заметки", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+
+        OutlinedTextField(
+            value = noteTitle,
+            onValueChange = { noteTitle = it },
+            label = { Text("Название") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = noteContent,
+            onValueChange = { noteContent = it },
+            label = { Text("Содержание") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+        )
+
+        Button(
+            onClick = {
+                coroutineScope.launch {
+                    saveNote(context, noteTitle, noteContent)
+                    noteTitle = ""
+                    noteContent = ""
+                    fileList = loadNotes(context)  // Refresh the file list after saving
+                }
+            },
+            enabled = isSaveEnabled,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Сохранить")
+        }
+
+        Text(text = "Список заметок", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+
+        if (fileList.isEmpty()) {
+            Text(text = "Нет сохраненных заметок.")
+        } else {
+            LazyColumn {
+                items(fileList) { file ->
+                    NoteItem(file = file, onDeleteClick = {
+                        coroutineScope.launch {
+                            deleteNote(context, file)
+                            fileList = loadNotes(context)  // Refresh the file list after deleting
+                        }
+                    })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NoteItem(file: File, onDeleteClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .clickable {
+                //  Реализация просмотра заметки
+            },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = file.name, color = Color.Black)  // Установите цвет текста
