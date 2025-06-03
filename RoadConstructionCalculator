@@ -1,0 +1,208 @@
+#RoadConstructionViewModel.cs
+
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using RoadConstructionCalculator.Models;
+using System;
+using System.Collections.ObjectModel;
+using System.Linq;
+
+public partial class RoadConstructionViewModel : ObservableObject
+{
+    private const double GeotextileThickness = 0.002; // Постоянная толщина геотекстиля в метрах
+    private const double SandDensity = 1500; // Постоянная плотность песка в кг/м³
+    private const double MaterialDensity = 2400; // Постоянная плотность материала в кг/м³
+
+    [ObservableProperty]
+    private double length;
+
+    [ObservableProperty]
+    private double width;
+
+    [ObservableProperty]
+    private RoadMaterialType selectedMaterialType;
+
+    [ObservableProperty]
+    private double sandThicknessCm; // Толщина песчаной подложки в сантиметрах
+
+    [ObservableProperty]
+    private double surfaceMaterialThicknessCm; // Толщина материала в сантиметрах
+
+    [ObservableProperty]
+    private double requiredMaterialAmount;
+
+    [ObservableProperty]
+    private double requiredSandAmount;
+
+    [ObservableProperty]
+    private double requiredGeotextileAmount;
+
+    [ObservableProperty]
+    private double totalCost;
+
+    [ObservableProperty]
+    private double materialCostPerKg = 0.5; // Стоимость материала за кг
+
+    [ObservableProperty]
+    private double sandCostPerCubicMeter = 10; // Стоимость песка за кубический метр
+
+    [ObservableProperty]
+    private double geotextileCostPerSquareMeter = 2; // Стоимость геотекстиля за квадратный метр
+
+    public ObservableCollection<RoadMaterialType> MaterialTypes { get; }
+
+    public string FormattedTotalCost => ConvertCost(TotalCost);
+
+    public RoadConstructionViewModel()
+    {
+        MaterialTypes = new ObservableCollection<RoadMaterialType>
+        {
+            RoadMaterialType.ShMA_22,
+            RoadMaterialType.ShMA_16,
+            RoadMaterialType.ShMA_11,
+            RoadMaterialType.ShPS
+        };
+
+        SelectedMaterialType = MaterialTypes.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    private void Calculate()
+    {
+        double roadArea = Length * Width;
+        double surfaceMaterialThicknessM = SurfaceMaterialThicknessCm / 100; // Перевод сантиметров в метры
+        double surfaceMaterialVolume = roadArea * surfaceMaterialThicknessM;
+        double sandThicknessM = SandThicknessCm / 100; // Перевод сантиметров в метры
+        double sandVolume = roadArea * sandThicknessM;
+
+        // Применяем различные коэффициенты в зависимости от типа материала
+        double materialCoefficient = GetMaterialCoefficient(SelectedMaterialType);
+
+        RequiredMaterialAmount = surfaceMaterialVolume * MaterialDensity * materialCoefficient / 1000; // Перевод в тонны
+        RequiredSandAmount = sandVolume * SandDensity / 1000; // Перевод в тонны
+        RequiredGeotextileAmount = Length * (Width + 2 * GeotextileThickness);
+
+        CalculateTotalCost();
+    }
+
+    private double GetMaterialCoefficient(RoadMaterialType materialType)
+    {
+        // Возвращаем коэффициент в зависимости от типа материала
+        return materialType switch
+        {
+            RoadMaterialType.ShMA_22 => 1.22,
+            RoadMaterialType.ShMA_16 => 1.16,
+            RoadMaterialType.ShMA_11 => 1.11,
+            RoadMaterialType.ShPS => 1.0,
+            _ => 1.0
+        };
+    }
+
+    private void CalculateTotalCost()
+    {
+        TotalCost = (RequiredMaterialAmount * MaterialCostPerKg * 1000) + // Перевод тонн в кг для расчета стоимости
+                    (RequiredSandAmount * SandCostPerCubicMeter * 1000) + // Перевод тонн в кг для расчета стоимости
+                    (RequiredGeotextileAmount * GeotextileCostPerSquareMeter);
+        OnPropertyChanged(nameof(FormattedTotalCost)); // Уведомляем об изменении свойства FormattedTotalCost
+    }
+
+    private string ConvertCost(double cost)
+    {
+        if (cost >= 1000000)
+        {
+            return $"{cost / 1000000:F2} млн руб";
+        }
+        else if (cost >= 1000)
+        {
+            return $"{cost / 1000:F2} тыс руб";
+        }
+        else
+        {
+            return $"{cost:F2} руб";
+        }
+    }
+}
+
+
+#MainView.axaml
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:RoadConstructionCalculator.ViewModels"
+             x:Class="RoadConstructionCalculator.Views.MainView"
+             x:DataType="vm:MainViewModel"
+			 Width="400" Height="700">
+
+	<Design.DataContext>
+		<vm:MainViewModel/>
+	</Design.DataContext>
+
+	<StackPanel Margin="20">
+		<TextBlock Text="Длина дороги (м):" Margin="0,0,0,5"/>
+		<TextBox Text="{Binding Length}" Margin="0,0,0,10" Watermark="Введите длину"/>
+
+		<TextBlock Text="Ширина дороги (м):" Margin="0,0,0,5"/>
+		<TextBox Text="{Binding Width}" Margin="0,0,0,10" Watermark="Введите ширину"/>
+
+		<TextBlock Text="Тип материала:" Margin="0,0,0,5"/>
+		<ComboBox ItemsSource="{Binding MaterialTypes}" SelectedItem="{Binding SelectedMaterialType}" Margin="0,0,0,10"/>
+
+		<TextBlock Text="Толщина материала (см):" Margin="0,0,0,5"/>
+		<TextBox Text="{Binding SurfaceMaterialThicknessCm}" Margin="0,0,0,10" Watermark="Введите толщину в см"/>
+
+		<TextBlock Text="Толщина песчаной подложки (см):" Margin="0,0,0,5"/>
+		<TextBox Text="{Binding SandThicknessCm}" Margin="0,0,0,10" Watermark="Введите толщину в см"/>
+
+		<TextBlock Text="Стоимость материала за кг:" Margin="0,0,0,5"/>
+		<TextBox Text="{Binding MaterialCostPerKg}" Margin="0,0,0,10" Watermark="Введите стоимость за кг"/>
+
+		<TextBlock Text="Стоимость песка за м³:" Margin="0,0,0,5"/>
+		<TextBox Text="{Binding SandCostPerCubicMeter}" Margin="0,0,0,10" Watermark="Введите стоимость за м³"/>
+
+		<TextBlock Text="Стоимость геотекстиля за м²:" Margin="0,0,0,5"/>
+		<TextBox Text="{Binding GeotextileCostPerSquareMeter}" Margin="0,0,0,10" Watermark="Введите стоимость за м²"/>
+
+		<Button Content="Рассчитать" Command="{Binding CalculateCommand}" Margin="0,10,0,10"/>
+
+		<TextBlock Text="{Binding RequiredMaterialAmount, StringFormat='Необходимое количество материала: {0} тонн'}" Margin="0,10,0,5"/>
+		<TextBlock Text="{Binding RequiredSandAmount, StringFormat='Необходимое количество песка: {0} тонн'}" Margin="0,5,0,5"/>
+		<TextBlock Text="{Binding RequiredGeotextileAmount, StringFormat='Необходимое количество геотекстиля: {0} м²'}" Margin="0,5,0,5"/>
+		<TextBlock Text="{Binding FormattedTotalCost, StringFormat='Общая стоимость: {0}'}" Margin="0,5,0,5"/>
+	</StackPanel>
+</UserControl>
+
+
+#RoadMaterial.cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace RoadConstructionCalculator.Models
+{
+    public enum RoadMaterialType
+    {
+        ShMA_22,
+        ShMA_16,
+        ShMA_11,
+        ShPS
+    }
+
+    public class RoadMaterial
+    {
+        public RoadMaterialType MaterialType { get; set; }
+        public double Thickness { get; set; } // Толщина слоя в метрах
+        public double Density { get; set; } // Плотность материала в кг/м³
+    }
+
+    public class RoadConstructionParameters
+    {
+        public double Length { get; set; } // Длина дороги в метрах
+        public double Width { get; set; } // Ширина дороги в метрах
+        public required RoadMaterial SurfaceMaterial { get; set; }
+        public double SandThickness { get; set; } // Толщина песчаной подложки в метрах
+        public double SandDensity { get; set; } // Плотность песка в кг/м³
+    }
+}
