@@ -1,0 +1,581 @@
+#LoginScreen
+package com.example.labwork26.Screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.labwork26.UserViewModel
+import androidx.navigation.NavController
+
+@Composable
+fun LoginScreen(navController: NavController) {
+    val userViewModel: UserViewModel = viewModel()
+    var login by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val error by userViewModel.error.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("Авторизация", style = MaterialTheme.typography.headlineMedium)
+
+        OutlinedTextField(
+            value = login,
+            onValueChange = { login = it },
+            label = { Text("Login") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        )
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Password") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        )
+
+        Button(
+            onClick = {
+                //TODO: Authentication logic
+                val user = userViewModel.getUserByLogin(login)
+                if (user != null && user.password == password) { // Здесь должна быть проверка ХЭША пароля
+                    navController.navigate("profile/${login}") // Переход к профилю
+                } else {
+                    userViewModel.setError("Неверный логин или пароль")
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("OK")
+        }
+        if (error != null) {
+            Snackbar(
+                action = {
+                    TextButton(onClick = { userViewModel.clearError() }) {
+                        Text("Dismiss")
+                    }
+                },
+                modifier = Modifier.padding(16.dp),
+                content = { Text(text = error!!) }
+            )
+        }
+    }
+}
+
+
+#ProfileScreen
+package com.example.labwork26.Screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.labwork26.UserViewModel
+import androidx.navigation.NavController
+import com.example.labwork26.Screen
+
+@Composable
+fun ProfileScreen(login: String, navController: NavController) {
+    val userViewModel: UserViewModel = viewModel()
+    val user by remember { mutableStateOf(userViewModel.getUserByLogin(login)) }
+
+    if (user != null) {
+        var age by remember { mutableStateOf(user!!.age.toString()) }
+        var country by remember { mutableStateOf(user!!.country) }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text("Профиль пользователя", style = MaterialTheme.typography.headlineMedium)
+            Text("Логин: ${user!!.login}", style = MaterialTheme.typography.bodyLarge)
+
+            OutlinedTextField(
+                value = age,
+                onValueChange = { age = it },
+                label = { Text("Age") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            )
+
+            OutlinedTextField(
+                value = country,
+                onValueChange = { country = it },
+                label = { Text("Country") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(onClick = { navController.navigate(Screen.UserList.route) }) {
+                    Text("Список пользователей")
+                }
+
+                Button(onClick = { navController.navigate(Screen.Login.route) }) {
+                    Text("Выход")
+                }
+            }
+        }
+    } else {
+        Text("Пользователь не найден")
+    }
+}
+
+
+#UserDetailsScreen
+package com.example.labwork26.Screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.labwork26.User
+import com.example.labwork26.UserViewModel
+import androidx.compose.runtime.collectAsState // Для использования collectAsState
+
+
+@Composable
+fun UserDetailsScreen(login: String) {
+    val userViewModel: UserViewModel = viewModel()
+    val user by remember { mutableStateOf(userViewModel.getUserByLogin(login)) }
+    val error by userViewModel.error.collectAsState()
+
+    if (user != null) {
+        UserDetailsContent(user = user!!, userViewModel = userViewModel)  // Передаем userViewModel
+    } else {
+        Text("Пользователь с логином $login не найден")
+    }
+
+    if (error != null) {
+        Snackbar(
+            action = {
+                TextButton(onClick = { userViewModel.clearError() }) {
+                    Text("Dismiss")
+                }
+            },
+            modifier = Modifier.padding(16.dp),
+            content = { Text(text = error!!) }
+        )
+    }
+}
+
+@Composable
+fun UserDetailsContent(user: User, userViewModel: UserViewModel) {
+    var age by remember { mutableStateOf(user.age.toString()) }
+    var country by remember { mutableStateOf(user.country) }
+
+    Column(
+        modifier = Modifier.padding(16.dp)
+    ) {
+        Text(text = "Login: ${user.login}", style = MaterialTheme.typography.headlineSmall)
+
+        // Поля ввода
+        OutlinedTextField(
+            value = age,
+            onValueChange = { age = it },
+            label = { Text("Age") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        )
+        OutlinedTextField(
+            value = country,
+            onValueChange = { country = it },
+            label = { Text("Country") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        )
+
+        // Кнопка "Редактировать"
+        Button(
+            onClick = {
+                if (age.isNotBlank() && country.isNotBlank()) {
+                    try {
+                        val ageInt = age.toInt()  // Это правильно - локальная val
+                        // ageInt = ageInt + 1 // Ошибка! Нельзя переназначать val
+                        val newAgeInt = ageInt + 1  // Правильно - создаем новую переменную
+                        userViewModel.updateUser(user.login, newAgeInt, country) // Используем новую переменную
+                    } catch (e: NumberFormatException) {
+                        // ...
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Редактировать")
+        }
+    }
+}
+
+
+#UserListScreen
+package com.example.labwork26.Screens
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.labwork26.User
+import androidx.navigation.NavController
+import com.example.labwork26.UserViewModel
+
+@Composable
+fun UserListScreen(navController: NavController) {
+    var userViewModel: UserViewModel = viewModel()
+    val users by userViewModel.users.collectAsState()
+    val error by userViewModel.error.collectAsState()
+
+    // Объявляем переменные как var
+    var newLogin by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var newAge by remember { mutableStateOf("") }
+    var newCountry by remember { mutableStateOf("") }
+    var loginToDelete by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier.padding(16.dp)
+    ) {
+        Text("User List:", style = MaterialTheme.typography.headlineMedium)
+
+        // Поля ввода для добавления пользователя
+        OutlinedTextField(
+            value = newLogin,
+            onValueChange = { newLogin = it },
+            label = { Text("Login") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        )
+        OutlinedTextField(
+            value = newPassword,
+            onValueChange = { newPassword = it },
+            label = { Text("Password") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        )
+        OutlinedTextField(
+            value = newAge,
+            onValueChange = { newAge = it },
+            label = { Text("Age") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        )
+        OutlinedTextField(
+            value = newCountry,
+            onValueChange = { newCountry = it },
+            label = { Text("Country") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        )
+
+        // Кнопка добавления пользователя
+        Button(
+            onClick = {
+                if (newLogin.isNotBlank() && newPassword.isNotBlank() && newAge.isNotBlank() && newCountry.isNotBlank()) {
+                    try {
+                        val age = newAge.toInt()
+                        val newUser = User(newLogin, newPassword, age, newCountry) // Хэшируйте пароль!
+                        userViewModel.addUser(newUser)
+                        newLogin = "" // Теперь все в порядке!
+                        newPassword = ""
+                        newAge = ""
+                        newCountry = ""
+                    } catch (e: NumberFormatException) {
+                        userViewModel.setError("Invalid age format") // Используем метод setError
+                    }
+                } else {
+                    userViewModel.setError("Please fill all fields") // Используем метод setError
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.End)
+                .padding(bottom = 8.dp)
+        ) {
+            Text("Добавить")
+        }
+
+        // Поле ввода для удаления пользователя
+        OutlinedTextField(
+            value = loginToDelete,
+            onValueChange = { loginToDelete = it },
+            label = { Text("Login для удаления") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        )
+
+        // Кнопка удаления пользователя
+        Button(
+            onClick = {
+                if (loginToDelete.isNotBlank()) {
+                    userViewModel.deleteUser(loginToDelete)
+                    loginToDelete = ""
+                }
+            },
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Text("Удалить")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyColumn {
+            items(users) { user ->
+                UserCard(user = user, navController = navController)
+            }
+        }
+        // Отображение ошибок
+        if (error != null) {
+            Snackbar(
+                action = {
+                    TextButton(onClick = { userViewModel.clearError() }) {
+                        Text("Dismiss")
+                    }
+                },
+                modifier = Modifier.padding(16.dp),
+                content = { Text(text = error!!) }
+            )
+        }
+    }
+}
+
+@Composable
+fun UserCard(user: User, navController: NavController) {
+    Card(
+        modifier = Modifier
+            .padding(8.dp)
+            .clickable {
+                navController.navigate("user_details/${user.login}")
+            }
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(text = "Login: ${user.login}")
+        }
+    }
+}
+
+
+#MainActivity
+package com.example.labwork26
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.labwork26.Screens.LoginScreen
+import com.example.labwork26.Screens.ProfileScreen
+import com.example.labwork26.Screens.UserDetailsScreen
+import com.example.labwork26.Screens.UserListScreen
+import com.example.labwork26.ui.theme.LabWork26Theme
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            LabWork26Theme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    val navController = rememberNavController()
+
+                    NavHost(navController = navController, startDestination = Screen.Login.route) { // Авторизация - стартовый экран
+                        composable(Screen.Login.route) {
+                            LoginScreen(navController = navController)
+                        }
+                        composable(Screen.UserList.route) {
+                            UserListScreen(navController = navController)
+                        }
+                        composable(Screen.UserDetails.route) { backStackEntry ->
+                            val login = backStackEntry.arguments?.getString("login") ?: ""
+                            UserDetailsScreen(login = login)
+                        }
+                        composable(Screen.Profile.route) { backStackEntry ->
+                            val login = backStackEntry.arguments?.getString("login") ?: ""
+                            ProfileScreen(login = login, navController = navController)
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+}
+
+
+#Screen
+package com.example.labwork26
+
+sealed class Screen(val route: String) {
+    object Login : Screen("login")
+    object UserList : Screen("user_list")
+    object UserDetails : Screen("user_details/{login}")
+    object Profile : Screen("profile/{login}")
+}
+
+#User
+package com.example.labwork26
+
+data class User(
+    val login: String,
+    val password: String,
+    val age: Int,
+    val country: String
+)
+
+
+#UserViewModel
+package com.example.labwork26
+
+import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import com.example.labwork26.User
+
+class UserViewModel : ViewModel() {
+
+    private val _users = MutableStateFlow<List<User>>(emptyList())
+    val users: StateFlow<List<User>> = _users
+
+    private val _error = MutableStateFlow<String?>(null)  // Private MutableStateFlow
+    val error: StateFlow<String?> = _error
+
+    init {
+        // Инициализация с тестовыми данными
+        val initialUsers = listOf(
+            User("Михаил_Боярский", "111", 30, "USA"),
+            User("Паша_Сникерс", "222", 25, "Canada"),
+            User("Жека_Баунти", "333", 40, "UK"),
+            User("Игорь_Заусенец", "444", 14, "Kazakhstan"),
+            User("qwe", "111", 14, "Kazakhstan")
+        )
+        _users.value = initialUsers
+    }
+
+    fun addUser(user: User) {
+        if (getUserByLogin(user.login) != null) {
+            _error.value = "User with this login already exists"
+            return
+        }
+        _users.value = _users.value + user
+        _error.value = null // Clear error on success
+    }
+
+    fun deleteUser(login: String) {
+        _users.value = _users.value.filter { it.login != login }
+        _error.value = null  // Clear error on success
+    }
+
+    fun getUserByLogin(login: String): User? {
+        return _users.value.find { it.login == login }
+    }
+
+    fun updateUser(login: String, newAge: Int, newCountry: String) {
+        val updatedUsers = _users.value.map { user ->
+            if (user.login == login) {
+                user.copy(age = newAge, country = newCountry)
+            } else {
+                user
+            }
+        }
+        _users.value = updatedUsers
+        _error.value = null // Clear error on success
+    }
+
+    fun setError(message: String) {
+        _error.value = message  // Используем _error.value для изменения значения
+    }
+
+    fun clearError() {
+        _error.value = null  // Очищаем ошибку
+    }
+}
+
+
+#build.grade.kts
+dependencies {
+// ---  ОСНОВНЫЕ ЗАВИСИМОСТИ ---
+    implementation("androidx.core:core-ktx:1.9.0") // Core library, Kotlin extensions
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2") // Lifecycle runtime, Kotlin extensions
+    implementation("androidx.activity:activity-compose:1.8.2") // Compose integration with Activity
+    implementation(platform("androidx.compose:compose-bom:2023.10.01")) // Bill of Materials (BOM) for Compose
+    implementation("androidx.compose.ui:ui") // Compose UI
+    implementation("androidx.compose.ui:ui-graphics") // Compose UI graphics
+    implementation("androidx.compose.ui:ui-tooling-preview") // Compose UI tooling preview
+    implementation("androidx.compose.material3:material3") // Material 3 Design System
+
+    // --- ТЕСТИРОВАНИЕ ---
+    testImplementation("junit:junit:4.13.2") // JUnit testing
+    androidTestImplementation("androidx.test.ext:junit:1.1.5") // JUnit extensions for Android
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1") // Espresso testing
+    androidTestImplementation(platform("androidx.compose:compose-bom:2023.10.01")) // Compose BOM for testing
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4") // Compose UI testing with JUnit
+    debugImplementation("androidx.compose.ui:ui-tooling") // Compose UI tooling
+    debugImplementation("androidx.compose.ui:ui-test-manifest") // Compose UI test manifest
+
+    // ---  ViewModel и LiveData ---
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2") // ViewModel, Kotlin extensions
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2") // Lifecycle runtime Compose
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2") // ViewModel Compose integration
+
+    // --- Навигация (ОСНОВНОЕ для ВАШЕГО ПРИЛОЖЕНИЯ!) ---
+    implementation("androidx.navigation:navigation-compose:2.7.6") // Compose Navigation (ВАЖНО!)
+    //implementation("androidx.navigation:navigation-ui-ktx:2.7.6") // UI для навигации - используйте, если хотите.
+    // --- КОРУТИНЫ ---
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3") // Coroutines for Android
+
+    // optional - Integration with activities
+    implementation("androidx.activity:activity-compose:1.8.2")
+
+}
+
+
+
